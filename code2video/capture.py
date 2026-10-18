@@ -8,9 +8,10 @@ The HTML contract (see templates/animation_template.html):
                                                          // fully deterministically
 
 GPU handling: we launch Chrome with GPU-accelerated compositing flags when a
-GPU is detected, then *verify* by probing chrome://gpu. If the verdict is
-"software only" while a GPU exists, we relaunch with an alternative ANGLE
-backend before giving up and staying on software.
+GPU is detected, then *verify* by asking the page for its WebGL renderer
+string (ANGLE/NVIDIA... = hardware, SwiftShader/llvmpipe = software). If the
+verdict is "software" while a GPU exists, we relaunch with an alternative
+ANGLE backend before staying on software.
 """
 from __future__ import annotations
 
@@ -55,7 +56,7 @@ class CaptureResult:
     width: int
     height: int
     browser: str
-    renderer: dict                       # chrome://gpu probe verdict
+    renderer: dict                       # WebGL renderer probe verdict
     gpu_available: bool
     warnings: List[str] = field(default_factory=list)
     elapsed_seconds: float = 0.0
@@ -128,12 +129,14 @@ class _BrowserSession:
     """A launched browser plus an attached page session, ready for CDP calls."""
 
     def __init__(self, proc, cdp: CDPSession, session_id: str,
-                 flags: List[str], headless_mode: str):
+                 flags: List[str], headless_mode: str,
+                 profile_dir: Optional[str] = None):
         self.proc = proc
         self.cdp = cdp
         self.session_id = session_id
         self.flags = flags
         self.headless_mode = headless_mode
+        self.profile_dir = profile_dir
         self.renderer: dict = {"probed": False}
 
     def close(self) -> None:
@@ -149,6 +152,8 @@ class _BrowserSession:
                 self.proc.kill()
             except Exception:
                 pass
+        if self.profile_dir:
+            shutil.rmtree(self.profile_dir, ignore_errors=True)
 
 
 def _open_session(browser: str, width: int, height: int, flags: List[str],
@@ -166,7 +171,8 @@ def _open_session(browser: str, width: int, height: int, flags: List[str],
             session_id = attached["sessionId"]
             cdp.call("Page.enable", session_id=session_id)
             cdp.call("Runtime.enable", session_id=session_id)
-            return _BrowserSession(proc, cdp, session_id, flags, headless_mode)
+            return _BrowserSession(proc, cdp, session_id, flags, headless_mode,
+                                   profile_dir=profile)
         except Exception:
             cdp.close()
             raise
@@ -241,6 +247,10 @@ def render_frames(cfg: CaptureConfig, log=print) -> CaptureResult:
             "No Chromium-family browser found. Install Chrome/Edge/Chromium or "
             "set CODE2VIDEO_BROWSER=/path/to/browser")
 
+    browser_version = detect_browser().version if not cfg.browser else None
+    headless_modes = ["old"] if not browser_supports_new_headless(
+        browser_version or "") else ["new"]
+
     out_dir = Path(cfg.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     for stale in out_dir.glob("frame_*.png"):
@@ -258,9 +268,6 @@ def render_frames(cfg: CaptureConfig, log=print) -> CaptureResult:
         flag_sets.append([])  # browser defaults
     else:
         flag_sets = [chrome_render_flags(gpu)]  # swiftshader
-
-    headless_modes = ["old"] if not browser_supports_new_headless(
-        detect_browser().version or "") else ["new"]
 
     def _try_open(modes):
         """Try each (headless mode, flag set) combo; keep the best session."""
