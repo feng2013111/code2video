@@ -1,0 +1,130 @@
+<!doctype html>
+<!--
+  code2video example — particles converge to spell HELLO, regroup into WORLD.
+
+  Demonstrates: seeded RNG (deterministic), offscreen text sampling,
+  phase-based easing, glow rendering.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Particles — HELLO / WORLD</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #05070f; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="stage" width="1280" height="720"></canvas>
+<script>
+"use strict";
+const SPEC = { fps: 30, frames: 180, width: 1280, height: 720 };
+window.VIDEO_SPEC = SPEC;
+
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const W = SPEC.width, H = SPEC.height;
+
+// deterministic RNG
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const easeInOut = (p) => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+// sample ~1100 points from rendered text (offscreen canvas)
+function sampleText(text) {
+  const off = document.createElement("canvas");
+  off.width = W; off.height = H;
+  const octx = off.getContext("2d");
+  octx.fillStyle = "#fff";
+  octx.font = "900 300px system-ui, sans-serif";
+  octx.textAlign = "center";
+  octx.textBaseline = "middle";
+  octx.fillText(text, W / 2, H / 2);
+  const data = octx.getImageData(0, 0, W, H).data;
+  const pts = [];
+  const step = 4;
+  for (let y = 0; y < H; y += step) {
+    for (let x = 0; x < W; x += step) {
+      if (data[(y * W + x) * 4 + 3] > 128) {
+        pts.push({ x: x, y: y });
+      }
+    }
+  }
+  return pts;
+}
+
+const POINTS_A = sampleText("HELLO");
+const POINTS_B = sampleText("WORLD");
+const rand = mulberry32(20261018);
+const N = Math.min(POINTS_A.length, POINTS_B.length, 1100);
+
+// particles: random start, two target sets
+const particles = [];
+for (let i = 0; i < N; i++) {
+  const a = POINTS_A[i % POINTS_A.length];
+  const b = POINTS_B[i % POINTS_B.length];
+  particles.push({
+    sx: rand() * W, sy: rand() * H,
+    ax: a.x, ay: a.y,
+    bx: b.x, by: b.y,
+    hue: 170 + (a.x / W) * 140      // cyan -> magenta by x
+  });
+}
+
+window.__renderFrame = function (index, t) {
+  const p = index / (SPEC.frames - 1);
+
+  // background with subtle vignette
+  ctx.fillStyle = "#05070f";
+  ctx.fillRect(0, 0, W, H);
+  const vig = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.85);
+  vig.addColorStop(0, "rgba(30,41,82,0.55)");
+  vig.addColorStop(1, "rgba(5,7,15,0)");
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
+
+  // phase timeline
+  const formA = clamp01(p / 0.40);
+  const swap = clamp01((p - 0.50) / 0.25);
+  const fade = 1 - clamp01((p - 0.92) / 0.08);
+
+  ctx.globalAlpha = fade;
+  for (let i = 0; i < N; i++) {
+    const pt = particles[i];
+    const eA = easeInOut(formA);
+    const eS = easeInOut(swap);
+    // start -> HELLO -> WORLD
+    let x = pt.sx + (pt.ax - pt.sx) * eA;
+    let y = pt.sy + (pt.ay - pt.sy) * eA;
+    x += (pt.bx - pt.ax) * eS;
+    y += (pt.by - pt.ay) * eS;
+    // gentle breathing once settled
+    if (p > 0.42) {
+      const wob = Math.sin(t * 2 + i * 0.35) * 3;
+      x += wob; y += Math.cos(t * 1.7 + i * 0.2) * 3;
+    }
+    ctx.fillStyle = `hsl(${pt.hue}, 90%, ${58 + 12 * Math.sin(i)}%)`;
+    ctx.beginPath();
+    ctx.arc(x, y, 2.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // caption
+  ctx.fillStyle = "rgba(248,249,250,0.85)";
+  ctx.font = "500 26px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  const label = p < 0.5 ? "particles converge" : (p < 0.92 ? "…and regroup" : "");
+  if (label) ctx.fillText(label, W / 2, H - 70);
+};
+</script>
+</body>
+</html>

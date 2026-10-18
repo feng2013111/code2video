@@ -1,0 +1,8 @@
+# Runtime dependencies.
+# websocket-client drives the Chrome DevTools Protocol (no puppeteer needed).
+websocket-client>=1.3
+
+# Optional but recommended: a self-contained ffmpeg fallback so the pipeline
+# works even when no system ffmpeg is installed (CPU libx264 only — a system
+# ffmpeg is preferred because full builds ship hardware encoders).
+imageio-ffmpeg>=0.4

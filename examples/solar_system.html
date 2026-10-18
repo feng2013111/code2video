@@ -1,0 +1,137 @@
+<!doctype html>
+<!--
+  code2video example — a tiny solar system.
+
+  Demonstrates: seeded starfield, orbital mechanics (angular speed ~ 1/sqrt(a)),
+  radial gradients, orbit rings, planet labels, deterministic from t only.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Solar System</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #030410; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="stage" width="1280" height="720"></canvas>
+<script>
+"use strict";
+const SPEC = { fps: 30, frames: 180, width: 1280, height: 720 };
+window.VIDEO_SPEC = SPEC;
+
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const W = SPEC.width, H = SPEC.height;
+const CX = W / 2, CY = H / 2;
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// starfield: fixed seed -> identical every render
+const rand = mulberry32(42);
+const stars = [];
+for (let i = 0; i < 260; i++) {
+  stars.push({ x: rand() * W, y: rand() * H, r: 0.4 + rand() * 1.3, tw: rand() * 6.28 });
+}
+
+// name, orbit radius (px), radius (px), color, revolutions per clip
+const PLANETS = [
+  { name: "Mercury", orbit: 70,  r: 5,  color: "#b0a99f", rev: 4.0 },
+  { name: "Venus",   orbit: 105, r: 8,  color: "#e8c47a", rev: 2.8 },
+  { name: "Earth",   orbit: 150, r: 9,  color: "#6ab7ff", rev: 2.0 },
+  { name: "Mars",    orbit: 195, r: 7,  color: "#e07a5f", rev: 1.5 },
+  { name: "Jupiter", orbit: 260, r: 20, color: "#d8a05c", rev: 1.0 },
+  { name: "Saturn",  orbit: 330, r: 17, color: "#e3cfa5", rev: 0.7, ring: true },
+];
+
+window.__renderFrame = function (index, t) {
+  const p = index / (SPEC.frames - 1);
+
+  ctx.fillStyle = "#030410";
+  ctx.fillRect(0, 0, W, H);
+
+  // stars (twinkle from t)
+  for (const s of stars) {
+    const a = 0.35 + 0.35 * (0.5 + 0.5 * Math.sin(t * 1.5 + s.tw));
+    ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // orbit rings
+  ctx.strokeStyle = "rgba(148,163,214,0.18)";
+  ctx.lineWidth = 1;
+  for (const pl of PLANETS) {
+    ctx.beginPath();
+    ctx.arc(CX, CY, pl.orbit, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // sun with glow
+  const glow = ctx.createRadialGradient(CX, CY, 0, CX, CY, 130);
+  glow.addColorStop(0, "rgba(255,214,120,0.9)");
+  glow.addColorStop(0.25, "rgba(255,160,60,0.35)");
+  glow.addColorStop(1, "rgba(255,140,40,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(CX - 140, CY - 140, 280, 280);
+  ctx.fillStyle = "#ffd97a";
+  ctx.beginPath();
+  ctx.arc(CX, CY, 26, 0, Math.PI * 2);
+  ctx.fill();
+
+  // planets
+  const intro = Math.min(1, p / 0.08);
+  ctx.textAlign = "center";
+  for (const pl of PLANETS) {
+    const angle = (t * pl.rev * Math.PI * 2) / 6.0 + pl.orbit; // phase offset by orbit
+    const x = CX + Math.cos(angle) * pl.orbit * intro;
+    const y = CY + Math.sin(angle) * pl.orbit * intro * 0.42; // slight ellipse
+
+    if (pl.ring) {
+      ctx.strokeStyle = "rgba(227,207,165,0.7)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(x, y, pl.r * 2.1, pl.r * 0.7, -0.4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    const grad = ctx.createRadialGradient(
+      x - pl.r * 0.4, y - pl.r * 0.4, pl.r * 0.1, x, y, pl.r);
+    grad.addColorStop(0, "#ffffff");
+    grad.addColorStop(0.25, pl.color);
+    grad.addColorStop(1, "rgba(0,0,0,0.55)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, pl.r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(226,232,255,0.75)";
+    ctx.font = "13px system-ui, sans-serif";
+    ctx.fillText(pl.name, x, y + pl.r + 18);
+  }
+
+  // title card
+  const titleA = Math.min(1, Math.max(0, (p - 0.04) / 0.1)) *
+                 (1 - Math.max(0, (p - 0.9) / 0.1));
+  ctx.globalAlpha = titleA;
+  ctx.fillStyle = "#f4f6ff";
+  ctx.font = "700 44px system-ui, sans-serif";
+  ctx.fillText("A Tiny Solar System", CX, 66);
+  ctx.font = "400 20px system-ui, sans-serif";
+  ctx.fillStyle = "rgba(226,232,255,0.7)";
+  ctx.fillText("drawn frame by frame with code2video", CX, 98);
+  ctx.globalAlpha = 1;
+};
+</script>
+</body>
+</html>

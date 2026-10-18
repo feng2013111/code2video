@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# render artifacts
+out/
+preview/
+*_frames/
+*.report.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
