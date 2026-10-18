@@ -7,7 +7,7 @@ name = "code2video"
 version = "0.1.0"
 description = "Let a text model draw videos frame by frame with code: HTML animation -> headless Chrome screenshots -> ffmpeg MP4, GPU auto-detected."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "code2video contributors" }]
 keywords = ["video", "animation", "headless-chrome", "ffmpeg", "cdp", "text-to-video", "canvas"]
@@ -30,7 +30,7 @@ dev = ["pytest>=7"]
 code2video = "code2video.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/<your-org>/code2video"
+Homepage = "https://github.com/feng2013111/code2video"
 
 [tool.setuptools]
 packages = ["code2video"]

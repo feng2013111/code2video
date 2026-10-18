@@ -309,20 +309,52 @@ def detect_ffmpeg() -> EncoderInfo:
     return info
 
 
-def choose_encoder(encoder_info: EncoderInfo, gpu: GPUInfo,
-                   forced: Optional[str] = None) -> Optional[str]:
-    """Pick the best encoder: GPU/OS-specific hardware first, libx264 last."""
-    if forced and forced != "auto":
-        return forced if forced in encoder_info.available else None
+def _dri_render_nodes() -> List[str]:
+    """DRM render nodes (VAAPI needs at least one to encode)."""
+    try:
+        return sorted(str(p) for p in Path("/dev/dri").glob("renderD*"))
+    except OSError:
+        return []
+
+
+def _vaapi_usable() -> bool:
+    """True if VAAPI encoding can plausibly work on this machine.
+
+    VAAPI needs a DRI render node; ``$CODE2VIDEO_VAAPI_DEVICE`` is an explicit
+    override for exotic setups and is trusted without further checks.
+    """
+    if os.environ.get("CODE2VIDEO_VAAPI_DEVICE"):
+        return True
+    if platform.system() != "Linux":
+        return False
+    return bool(_dri_render_nodes())
+
+
+def encoder_candidates(encoder_info: EncoderInfo, gpu: GPUInfo) -> List[str]:
+    """Every encoder worth trying, best first (libx264 always last).
+
+    Being *compiled into* an ffmpeg build does not mean an encoder can encode
+    on this machine (see compose.probe_encoder); this ordering is the cheap,
+    deterministic first pass. VAAPI is additionally skipped without a DRI
+    render node.
+    """
     preferred = list(_VENDOR_ENCODERS.get(gpu.vendor or "", []))
     if platform.system() == "Linux" and gpu.vendor in ("amd", "intel"):
         # VAAPI is the reliable hardware path for AMD/Intel on Linux
         preferred = ["h264_vaapi"] + [e for e in preferred if e != "h264_vaapi"]
     order = preferred + [e for e in KNOWN_ENCODERS if e not in preferred]
-    for enc in order:
-        if enc in encoder_info.available:
-            return enc
-    return None
+    return [enc for enc in order
+            if enc in encoder_info.available
+            and not (enc == "h264_vaapi" and not _vaapi_usable())]
+
+
+def choose_encoder(encoder_info: EncoderInfo, gpu: GPUInfo,
+                   forced: Optional[str] = None) -> Optional[str]:
+    """Pick the best encoder: GPU/OS-specific hardware first, libx264 last."""
+    if forced and forced != "auto":
+        return forced if forced in encoder_info.available else None
+    candidates = encoder_candidates(encoder_info, gpu)
+    return candidates[0] if candidates else None
 
 
 # --------------------------------------------------------------------------

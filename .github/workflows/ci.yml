@@ -22,7 +22,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt pytest
 
       # GitHub's ubuntu images ship Chrome but not ffmpeg; windows images
       # ship Chrome and use the imageio-ffmpeg wheel from requirements.txt.
@@ -33,10 +33,10 @@ jobs:
           sudo apt-get install -y ffmpeg
 
       - name: Unit tests
-        run: pytest -q
+        run: python -m pytest -q
 
       # End-to-end: launch headless Chrome, render 3 frames, compose an MP4.
       - name: Smoke test (headless Chrome -> MP4)
         env:
           CODE2VIDEO_SMOKE: "1"
-        run: pytest tests/test_smoke.py -q -s
+        run: python -m pytest tests/test_smoke.py -q -s

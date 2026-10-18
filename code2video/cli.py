@@ -55,7 +55,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_render.add_argument("--encoder", default="auto",
                           choices=["auto", "h264_nvenc", "h264_qsv", "h264_amf",
                                    "h264_videotoolbox", "h264_vaapi", "libx264"],
-                          help="video encoder (default: auto = best available)")
+                          help="video encoder (default: auto = probe each "
+                               "candidate with a test encode and keep the "
+                               "best one that works)")
     p_render.add_argument("--crf", type=int, default=18,
                           help="quality, 0-51 x264 scale (default: 18)")
     p_render.add_argument("--preset", default="medium",

@@ -33,7 +33,9 @@ python -m code2video env            # 自检：GPU / 浏览器 / ffmpeg / 编码
 - ffmpeg：优先用系统 ffmpeg（通常带硬件编码器）；没有则用 pip 包
   imageio-ffmpeg 兜底（仅 CPU libx264）。
 - GPU：检测到 NVIDIA/AMD/Intel/Apple GPU 时，Chrome 以 GPU 合成渲染，
-  并通过 chrome://gpu 验证；软件渲染时自动回退 SwiftShader，保证一定能出片。
+  并通过 WebGL renderer 探测验证；软件渲染时自动回退 SwiftShader，保证一定能出片。
+- 编码器：auto 模式按 GPU/OS 排候选，逐个做 1 帧试编码验证，第一个真能用的
+  胜出（`ffmpeg -encoders` 只说明编译进去了，不代表这台机器能用）。
 
 ## HTML 动画契约（必读）
 

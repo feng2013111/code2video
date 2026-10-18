@@ -41,6 +41,56 @@ def test_choose_encoder_forced_must_exist():
     assert detect.choose_encoder(enc, gpu, forced="h264_qsv") is None
 
 
+def test_encoder_candidates_skips_vaapi_without_render_node(monkeypatch):
+    monkeypatch.setattr(detect.platform, "system", lambda: "Linux")
+    monkeypatch.delenv("CODE2VIDEO_VAAPI_DEVICE", raising=False)
+    monkeypatch.setattr(detect, "_dri_render_nodes", lambda: [])
+    gpu = detect.GPUInfo(available=True, vendor="amd")
+    enc = detect.EncoderInfo(available=["h264_vaapi", "libx264"])
+    assert detect.encoder_candidates(enc, gpu) == ["libx264"]
+    assert detect.choose_encoder(enc, gpu) == "libx264"
+
+
+def test_encoder_candidates_uses_vaapi_with_render_node(monkeypatch):
+    monkeypatch.setattr(detect.platform, "system", lambda: "Linux")
+    monkeypatch.delenv("CODE2VIDEO_VAAPI_DEVICE", raising=False)
+    monkeypatch.setattr(detect, "_dri_render_nodes",
+                        lambda: ["/dev/dri/renderD128"])
+    gpu = detect.GPUInfo(available=True, vendor="amd")
+    enc = detect.EncoderInfo(available=["h264_vaapi", "h264_qsv", "libx264"])
+    assert detect.encoder_candidates(enc, gpu) == \
+        ["h264_vaapi", "h264_qsv", "libx264"]
+
+
+def test_encoder_candidates_vaapi_env_override(monkeypatch):
+    monkeypatch.setattr(detect.platform, "system", lambda: "Linux")
+    monkeypatch.setenv("CODE2VIDEO_VAAPI_DEVICE", "/dev/dri/renderD129")
+    monkeypatch.setattr(detect, "_dri_render_nodes", lambda: [])
+    gpu = detect.GPUInfo(available=True, vendor="amd")
+    enc = detect.EncoderInfo(available=["h264_vaapi", "libx264"])
+    assert detect.encoder_candidates(enc, gpu)[0] == "h264_vaapi"
+
+
+def test_encoder_candidates_vaapi_never_off_linux(monkeypatch):
+    monkeypatch.setattr(detect.platform, "system", lambda: "Windows")
+    monkeypatch.delenv("CODE2VIDEO_VAAPI_DEVICE", raising=False)
+    gpu = detect.GPUInfo(available=True, vendor="amd")
+    enc = detect.EncoderInfo(available=["h264_vaapi", "h264_amf", "libx264"])
+    # amd on Windows prefers h264_amf; vaapi must not be a candidate there
+    assert detect.encoder_candidates(enc, gpu) == ["h264_amf", "libx264"]
+
+
+def test_encoder_candidates_libx264_always_last(monkeypatch):
+    monkeypatch.setattr(detect.platform, "system", lambda: "Linux")
+    monkeypatch.delenv("CODE2VIDEO_VAAPI_DEVICE", raising=False)
+    monkeypatch.setattr(detect, "_dri_render_nodes", lambda: [])
+    gpu = detect.GPUInfo(available=True, vendor="nvidia")
+    enc = detect.EncoderInfo(
+        available=["libx264", "h264_qsv", "h264_vaapi", "h264_nvenc"])
+    assert detect.encoder_candidates(enc, gpu) == \
+        ["h264_nvenc", "h264_qsv", "libx264"]
+
+
 def test_render_flags_gpu_vs_software():
     hw = detect.chrome_render_flags(detect.GPUInfo(available=True, vendor="nvidia"))
     assert "--enable-gpu-rasterization" in hw

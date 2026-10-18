@@ -12,16 +12,16 @@ so PRs are easy to review.
 3. **Cross-platform or nothing.** Windows / macOS / Linux paths and probes.
 4. Every PR that touches capture/compose should pass:
    ```bash
-   pytest
-   CODE2VIDEO_SMOKE=1 pytest tests/test_smoke.py -s
+   pip install -e ".[dev]"   # runtime deps + pytest
+   python -m pytest
+   CODE2VIDEO_SMOKE=1 python -m pytest tests/test_smoke.py -s
    ```
 
 ## Good first contributions
 
 - new examples in `examples/` (bar-chart race, wave field, text typewriter)
-- VAAPI encoding for Linux
 - WebM/GIF output in `compose.py`
-- better `chrome://gpu` parsing / verdict heuristics
+- frame-directory reuse / resume from a partial render
 
 ## Commit style
 
